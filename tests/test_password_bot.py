@@ -4,8 +4,10 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
+import websocket
+
 from squad_radio.config import LOCAL_TZ, PersonaConfig
-from squad_radio.kook_bot import build_reply, should_reply
+from squad_radio.kook_bot import KookBot, build_reply, should_reply
 from squad_radio.password import PasswordCache, PasswordData, parse_json_payload
 from squad_radio.persona import ArchitectPersona
 
@@ -86,6 +88,52 @@ def test_reply_mentions_asker_and_uses_persona():
     assert "AZ3" in text
     assert "指挥官" in text
     assert "嘻嘻" not in text
+
+
+def test_connect_recovers_from_expired_session(tmp_path, monkeypatch):
+    """A stale resume session must be dropped, not retried forever."""
+    state_path = tmp_path / "state.json"
+    state_path.write_text(
+        json.dumps({"sn": 42, "session_id": "old-session"}), encoding="utf-8"
+    )
+    bot = KookBot("dummy-token", state_path=state_path)
+    monkeypatch.setattr(
+        bot.client, "gateway", lambda compress=0: {"url": "wss://gateway.test/ws"}
+    )
+
+    urls: list[str] = []
+    responses = iter(
+        [
+            json.dumps({"s": 5, "d": {"code": 40107, "err": "Session expired"}}),
+            json.dumps({"s": 1, "d": {"code": 0, "session_id": "fresh-session"}}),
+        ]
+    )
+
+    class FakeWS:
+        def __init__(self, url, **_kwargs):
+            urls.append(url)
+
+        def recv(self):
+            return next(responses)
+
+        def close(self):
+            pass
+
+        def settimeout(self, _value):
+            pass
+
+    monkeypatch.setattr(websocket, "create_connection", FakeWS)
+
+    bot._load_state()
+    ws = bot._connect()
+
+    assert ws is not None
+    assert len(urls) == 2
+    assert "resume=1" in urls[0]
+    assert "resume=1" not in urls[1]
+    assert bot.session_id == "fresh-session"
+    assert bot.last_sn == 0
+    assert json.loads(state_path.read_text(encoding="utf-8"))["session_id"] == "fresh-session"
 
 
 def test_reply_without_password_uses_error_tone():

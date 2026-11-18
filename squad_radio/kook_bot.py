@@ -138,17 +138,40 @@ class KookBot:
         return url
 
     def _connect(self) -> websocket.WebSocket:
-        url = self._gateway_url()
-        ws = websocket.create_connection(url, timeout=6, enable_multithread=True)
-        raw = ws.recv()
-        hello = json.loads(raw)
-        if hello.get("s") != 1 or int(hello.get("d", {}).get("code", -1)) != 0:
-            ws.close()
-            raise RuntimeError(f"HELLO 失败：{raw[:200]}")
-        self.session_id = hello["d"].get("session_id") or self.session_id
-        self._save_state()
-        LOG.info("WebSocket 已连接，session=%s", self.session_id)
-        return ws
+        """Connect and complete HELLO; self-heal a stale resume session.
+
+        KOOK answers a rejected resume with ``s=5`` (RECONNECT, 40107/40108)
+        instead of ``s=1`` HELLO. If we treat that as a generic handshake
+        failure and retry with the same saved session_id, we loop forever.
+        """
+        for attempt in range(2):
+            url = self._gateway_url()
+            ws = websocket.create_connection(url, timeout=6, enable_multithread=True)
+            try:
+                raw = ws.recv()
+                hello = json.loads(raw)
+                signal = int(hello.get("s", -1))
+                detail = hello.get("d") or {}
+                code = int(detail.get("code", -1))
+
+                if signal == 5 or code in (40107, 40108):
+                    LOG.warning("resume 会话已失效（code=%s），清除状态重连", code)
+                    self._clear_state()
+                    ws.close()
+                    continue
+
+                if signal != 1 or code != 0:
+                    ws.close()
+                    raise RuntimeError(f"HELLO 失败：{raw[:200]}")
+
+                self.session_id = detail.get("session_id") or self.session_id
+                self._save_state()
+                LOG.info("WebSocket 已连接，session=%s", self.session_id)
+                return ws
+            except Exception:
+                ws.close()
+                raise
+        raise RuntimeError("清除会话状态后仍无法完成 HELLO 握手")
 
     def refresh_password(self) -> None:
         cached = self.cache.get()
