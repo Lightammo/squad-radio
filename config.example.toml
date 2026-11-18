@@ -1,0 +1,38 @@
+[app]
+timezone = "Asia/Shanghai"
+db_path = "data/squad_radio.db"
+
+[noise]
+daily_cap = 12
+dedupe_minutes = 30
+quiet_hours = ["01:00-07:30"]
+high_priority_passthrough = 3
+
+[defaults]
+price_threshold_pct = 15.0
+price_window_minutes = 30
+red_min_value_wan = 100.0
+
+[persona]
+enabled = true
+style = "architect"
+# off / light / normal / full
+intensity = "normal"
+address = "指挥官"
+
+[[groups]]
+id = "demo-group"
+name = "三角洲开黑群"
+enabled = true
+
+[[groups.subscriptions]]
+item = "钛合金"
+threshold_pct = 15.0
+window_minutes = 30
+enabled = true
+
+[[groups.subscriptions]]
+item = "曼德尔超算单元"
+threshold_pct = 10.0
+window_minutes = 60
+enabled = true

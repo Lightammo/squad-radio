@@ -1,0 +1,5 @@
+{"type":"price_snapshot","subject":"钛合金","value":6.95,"group_id":"demo-group","ts":"2026-11-18T10:00:00+00:00"}
+{"type":"price_snapshot","subject":"钛合金","value":8.2,"group_id":"demo-group","ts":"2026-11-18T10:20:00+00:00"}
+{"type":"red_drop","subject":"曼德尔超算单元","value":280,"group_id":"demo-group","user_id":"10001","ts":"2026-11-18T10:21:00+00:00","payload":{"map":"长弓溪谷"}}
+{"type":"task_completed","subject":"特勤处制造","group_id":"demo-group","user_id":"10002","ts":"2026-11-18T10:22:00+00:00","payload":{"machine":"制造台"}}
+{"type":"daily_password","subject":"2026-11-18","group_id":"demo-group","ts":"2026-11-18T00:00:00+00:00","payload":{"password":"DF-1118"}}
