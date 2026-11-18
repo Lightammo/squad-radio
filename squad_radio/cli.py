@@ -112,7 +112,37 @@ def main() -> None:
     bot_parser.add_argument("--trigger", default="今日密码")
     _add_common(bot_parser)
 
+    upload_parser = subparsers.add_parser(
+        "kook-upload-asset", help="Upload a local image to KOOK CDN and print its URL"
+    )
+    upload_parser.add_argument("--file", required=True, help="Local image file path")
+    _add_common(upload_parser)
+
+    preview_parser = subparsers.add_parser(
+        "preview", help="Preview the rich KMarkdown password reply without sending"
+    )
+    preview_parser.add_argument("--password-cache", default="data/password_cache.json")
+    preview_parser.add_argument("--user", default="1000000001")
+    _add_common(preview_parser)
+
     args = parser.parse_args()
+
+    if args.command == "kook-upload-asset":
+        client = _kook_client(args)
+        try:
+            print(client.upload_asset(args.file))
+        except KookApiError as exc:
+            print(f"KOOK 上传失败：code={exc.code} message={exc.message}")
+            raise SystemExit(1) from exc
+        return
+
+    if args.command == "preview":
+        from .kook_bot import build_reply
+        from .persona import ArchitectPersona
+
+        data = PasswordCache(args.password_cache).get()
+        print(build_reply(data, args.user, ArchitectPersona()))
+        return
 
     if args.command == "kook-bot":
         token = _kook_token(args)

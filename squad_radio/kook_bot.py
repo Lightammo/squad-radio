@@ -20,6 +20,7 @@ from .config import LOCAL_TZ, PersonaConfig
 from .kook import KookApiError, KookClient
 from .password import PasswordCache, PasswordData
 from .persona import ArchitectPersona, PersonaContext, Tone
+from .rich import RichStyle, format_password_card
 
 LOG = logging.getLogger("squad_radio.kook_bot")
 
@@ -41,20 +42,43 @@ def should_reply(event: dict[str, Any], bot_user_id: str | None, trigger: str) -
     return trigger in str(event["content"])
 
 
-def build_reply(data: PasswordData | None, author_id: str, persona: ArchitectPersona) -> str:
+def build_reply(
+    data: PasswordData | None,
+    author_id: str,
+    persona: ArchitectPersona,
+    style: RichStyle | None = None,
+) -> str:
     mention = f"(met){author_id}(met)"
+    ctx_kwargs = dict(
+        key=f"password-reply:{author_id}",
+        mention=True,
+        event_type=None,
+    )
     if data is None:
-        core = f"{mention} 今日密码还没查到呢，稍等我再试一次。"
         tone = Tone.ERROR
-    else:
-        title = f"**今日作战密码 · {data.date}**"
-        body = "\n".join(data.lines()) if data.lines() else "数据暂不可用"
-        note = "数据每天早上更新，以游戏内为准哦。"
-        core = f"{mention} {title}\n{body}\n{note}"
-        tone = Tone.INFO
-    return persona.render(
-        core,
-        PersonaContext(tone=tone, key=f"password-reply:{author_id}", mention=True),
+        note = persona.render(
+            "今日密码还没查到呢，稍等我再试一次。",
+            PersonaContext(tone=tone, **ctx_kwargs),
+        )
+        return format_password_card(
+            [note],
+            title="今日作战密码 · 查询中",
+            mention=mention,
+            footnote="数据拉取失败时不会拿旧密码冒充，请稍后再问一次哦。",
+            style=style,
+        )
+
+    body = data.lines() if data.lines() else ["数据暂不可用"]
+    note = persona.render(
+        "数据每天早上更新，以游戏内为准哦。",
+        PersonaContext(tone=Tone.INFO, **ctx_kwargs),
+    )
+    return format_password_card(
+        body,
+        title=f"今日作战密码 · {data.date}",
+        mention=mention,
+        footnote=note,
+        style=style,
     )
 
 
@@ -67,6 +91,7 @@ class KookBot:
         state_path: str | Path = "data/kook_bot_state.json",
         trigger: str = "今日密码",
         bot_user_id: str | None = None,
+        style: RichStyle | None = None,
     ):
         self.client = KookClient(token)
         self.cache = password_cache or PasswordCache("data/password_cache.json")
@@ -74,6 +99,7 @@ class KookBot:
         self.state_path = Path(state_path)
         self.trigger = trigger
         self.bot_user_id = bot_user_id
+        self.style = style or RichStyle()
         self.last_sn = 0
         self.session_id: str | None = None
 
@@ -137,7 +163,7 @@ class KookBot:
         author_id = str(event["author_id"])
         channel_id = str(event["target_id"])
         data = self.cache.get()
-        content = build_reply(data, author_id, self.persona)
+        content = build_reply(data, author_id, self.persona, self.style)
         try:
             self.client.send_message(channel_id, content, msg_type=9)
             LOG.info("已在频道 %s 回复用户 %s", channel_id, author_id)
