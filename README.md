@@ -6,6 +6,8 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
+> ⚠️ **声明**：本项目由 AI 助手 **WorkBuddy** 生成，包含代码、文档、测试用例与示例数据。**内容请自行分辨与核实**，不保证完全准确、可靠或适用于生产环境；使用前请审阅关键逻辑、确认第三方数据源授权，并妥善保管 Token。
+
 ## 它解决什么问题
 
 现有的三角洲插件（DeltaUID、AstrBot 三角洲插件等）都是**你问它答**：要先输入 `ss战绩`、`日报`、`ss价格` 才有响应。Squad Radio 反过来——**它替你盯着数据，有事才说话**。
