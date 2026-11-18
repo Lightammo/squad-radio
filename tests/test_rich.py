@@ -1,26 +1,11 @@
-"""Tests for KMarkdown rich formatting and KOOK asset helper."""
+"""Tests for KMarkdown text formatting."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from squad_radio.models import Broadcast
-from squad_radio.rich import (
-    DEFAULT_IMAGES,
-    RichStyle,
-    format_broadcast,
-    format_password_card,
-    thumb,
-)
-from squad_radio.password import PasswordData
+from squad_radio.rich import RichStyle, format_broadcast, format_password_card
 
 
-def test_thumb_uses_same_url_as_label():
-    url = "https://img.kookapp.cn/attachments/x.png"
-    assert thumb(url) == f"[{url}]({url})"
-    assert thumb(None) == ""
-
-
-def test_price_broadcast_has_thumbnail_title_and_action():
+def test_price_broadcast_has_title_spoiler_and_action():
     b = Broadcast(
         group_id="g",
         text="指挥官，行情图纸刷新了哦。钛合金 涨了 18%，当前 8.2 万。",
@@ -29,10 +14,11 @@ def test_price_broadcast_has_thumbnail_title_and_action():
         actions=["订阅 钛合金"],
     )
     out = format_broadcast(b)
-    assert DEFAULT_IMAGES["market"] in out
     assert "**📈 行情异动播报**" in out
-    assert "`(spl)" not in out and "(spl)" in out
+    assert "(spl)" in out
     assert "快捷指令：" in out and "`订阅 钛合金`" in out
+    assert "http" not in out
+    assert "![" not in out
 
 
 def test_red_broadcast_converts_plain_mention_to_met_syntax():
@@ -46,40 +32,36 @@ def test_red_broadcast_converts_plain_mention_to_met_syntax():
     out = format_broadcast(b)
     assert "(met)10001(met)" in out
     assert "@10001" not in out
-    assert DEFAULT_IMAGES["red"] in out
+    assert "**💎 高价值物资**" in out
+    assert "http" not in out
 
 
-def test_style_can_disable_images_and_splash():
+def test_style_can_disable_splash_and_actions():
     b = Broadcast(
         group_id="g",
         text="测试内容",
         event_key="task:u:制造台:1",
         priority=2,
-        actions=[],
+        actions=["订阅 钛合金"],
     )
-    plain = format_broadcast(b, RichStyle(show_thumbnail=False, show_splash=False))
-    assert "http" not in plain
+    plain = format_broadcast(b, RichStyle(show_splash=False, show_actions=False))
     assert "(spl)" not in plain
+    assert "快捷指令" not in plain
     assert "**🔧 特勤处完工**" in plain
+    assert "测试内容" in plain
 
 
-def test_custom_images_override_defaults():
-    b = Broadcast(group_id="g", text="内容", event_key="price:x:1", priority=2)
-    custom = {"market": "https://img.kookapp.cn/custom.png"}
-    out = format_broadcast(b, RichStyle(images=custom))
-    assert "custom.png" in out
-    assert DEFAULT_IMAGES["market"] not in out
-
-
-def test_password_card_structure():
+def test_password_card_structure_has_no_image():
     card = format_password_card(
         ["零号大坝：`8865`", "长弓溪谷：`4565`"],
         title="今日作战密码 · 2026-11-18",
         mention="(met)10001(met)",
         footnote="指挥官，请以游戏内为准哦。",
     )
-    assert card.startswith("[https://")
-    assert "(met)10001(met) **今日作战密码 · 2026-11-18**" in card
+    assert card.startswith("(met)10001(met) **今日作战密码 · 2026-11-18**")
+    assert "零号大坝：`8865`" in card
     assert "(spl)" in card
     assert "---" in card
     assert "> 指挥官，请以游戏内为准哦。" in card
+    assert "http" not in card
+    assert "![" not in card

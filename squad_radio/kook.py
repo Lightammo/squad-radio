@@ -2,12 +2,9 @@
 from __future__ import annotations
 
 import json
-import mimetypes
 import urllib.error
 import urllib.parse
 import urllib.request
-import uuid
-from pathlib import Path
 from typing import Any
 
 from .broadcasters import Broadcaster
@@ -123,55 +120,6 @@ class KookClient:
             payload["nonce"] = nonce
         data = self._request("POST", "/message/create", payload=payload)
         return dict(data or {})
-
-    def upload_asset(self, file_path: str | Path) -> str:
-        """Upload a local image to KOOK CDN and return its permanent URL.
-
-        Uses multipart/form-data as required by /api/v3/asset/create. The
-        returned img.kookapp.cn URL has no hotlink protection, so it renders
-        reliably inside KOOK when used as a link thumbnail.
-        """
-        path = Path(file_path)
-        if not path.is_file():
-            raise KookApiError(-4, f"asset file not found: {path}")
-        raw = path.read_bytes()
-        mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-        boundary = f"----squadradio{uuid.uuid4().hex}"
-        head = (
-            f"--{boundary}\r\n"
-            f'Content-Disposition: form-data; name="file"; filename="{path.name}"\r\n'
-            f"Content-Type: {mime}\r\n\r\n"
-        ).encode("utf-8")
-        tail = f"\r\n--{boundary}--\r\n".encode("utf-8")
-        body = head + raw + tail
-
-        url = f"{self.base_url}/asset/create"
-        request = urllib.request.Request(
-            url,
-            data=body,
-            method="POST",
-            headers={
-                "Authorization": f"Bot {self.token}",
-                "Accept": "application/json",
-                "Content-Type": f"multipart/form-data; boundary={boundary}",
-            },
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=max(self.timeout, 20)) as response:
-                result = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            raise KookApiError(exc.code, exc.read().decode("utf-8", errors="replace")[:200]) from exc
-        except urllib.error.URLError as exc:
-            raise KookApiError(-1, f"network error: {exc.reason}") from exc
-
-        code = int(result.get("code", -3))
-        if code != 0:
-            raise KookApiError(code, str(result.get("message", "upload failed")))
-        asset_url = str((result.get("data") or {}).get("url") or "")
-        if not asset_url:
-            raise KookApiError(-5, "asset/create returned empty url")
-        return asset_url
-
 
 class KookBroadcaster(Broadcaster):
     """Send Squad Radio broadcasts into a KOOK text channel."""

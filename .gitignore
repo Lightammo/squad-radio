@@ -16,4 +16,3 @@ data/*.db-journal
 data/*.sqlite
 data/*.sqlite-journal
 data/*.json
-data/assets/

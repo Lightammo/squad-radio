@@ -20,7 +20,7 @@
 
 | 模块 | 类型 | 说明 |
 | --- | --- | --- |
-| 大红 / 高价值物资播报 | 社交货币 | 出大红自动发带图播报并 `@` 出红者，把个人成就变成群内公共事件 |
+| 大红 / 高价值物资播报 | 社交货币 | 出大红自动播报并 `@` 出红者，把个人成就变成群内公共事件 |
 | 物价异动预警 | 实用决策 | 关注物品 + 阈值 + 窗口，触发即播报，从"查价"变成"价格来找你" |
 | 每日密码 + 特勤处提醒 | 习惯锚定 | 早八作战简报 + 制造完成 `@` 本人，养成"看群就知道今天干嘛" |
 
@@ -181,16 +181,16 @@ GET gateway(compress=0) → WebSocket → HELLO(s=1,code=0)
 
 所有发到 KOOK 的消息都经过 `squad_radio/rich.py` 排版，用官方文档支持的 KMarkdown 语法，而不是干巴巴的一行文字：
 
-- **主题头图**：每张播报带一张军事风格横幅（密码/大红/物价/特勤处各一张）
 - **结构化排版**：加粗标题 + 行内代码数值 + 分隔线 + 引用脚注
 - **@ 提问人**：用 KOOK 原生 `(met)用户ID(met)` 语法，真实触发提醒
 - **彩蛋**：用剧透语法 `(spl)...(spl)` 藏一句可点开的俏皮话，不占正文
 - **建筑师语气**：脚注仍由人格层生成，「指挥官 / 施工简报 / 请查收哦」照旧
 
+> 说明：KOOK KMarkdown 不支持 `![图](url)` 内联图片语法，所以消息保持纯文字卡片，避免用第三方图床时的防盗链问题。
+
 当前密码消息的实际效果：
 
 ```text
-[https://img.kookapp.cn/.../password_banner.png](同址)   ← 折叠成头图预览
 (met)用户ID(met) **今日作战密码 · 2026-11-18**
 零号大坝：`8865`   长弓溪谷：`4565`   巴克什：`6468`
 航天基地：`8572`   潮汐监狱：`2161`   AZ3：`2430`
@@ -199,25 +199,13 @@ GET gateway(compress=0) → WebSocket → HELLO(s=1,code=0)
 > 早八施工简报，指挥官请查收哦。数据每天早上更新，以游戏内为准哦。
 ```
 
-> **为什么用链接缩略图而不是 `![图](url)`**：KOOK KMarkdown 不支持内联图片语法，官方文档只有「链接文字与地址完全一致时显示链接预览」这一条。图片因此托管在 KOOK 自有 CDN（`img.kookapp.cn`），没有第三方防盗链问题。
-
 本地预览（不发送）：
 
 ```bash
 python -m squad_radio.cli preview
 ```
 
-调整美化程度（改 `squad_radio/rich.py` 的 `RichStyle`）：`show_thumbnail` 关头图、`show_splash` 关彩蛋、`images` 换自定义图片 URL。
-
-重新生成并上传头图：
-
-```bash
-# 1. 生成 PNG（需要 Pillow：pip install Pillow）
-python scripts/generate_assets.py
-
-# 2. 逐张上传到 KOOK CDN，把返回的 URL 填进 rich.py 的 DEFAULT_IMAGES
-python -m squad_radio.cli kook-upload-asset --file data/assets/password_banner.png --token-file .env.token
-```
+调整美化程度（改 `squad_radio/rich.py` 的 `RichStyle`）：`show_splash` 关彩蛋、`show_actions` 关快捷指令提示。
 
 ## 部署到服务器
 
@@ -272,8 +260,7 @@ squad-radio/
 ├── data/
 │   └── events.example.jsonl  # 示例事件（运行时数据均被忽略）
 ├── scripts/
-│   ├── kook_ws_probe.mjs     # Node 版 WebSocket 探测脚本
-│   └── generate_assets.py    # 生成播报主题头图（可选，需 Pillow）
+│   └── kook_ws_probe.mjs     # Node 版 WebSocket 探测脚本
 ├── squad_radio/
 │   ├── cli.py                # 命令行入口
 │   ├── config.py             # 配置加载与本地时区
@@ -283,7 +270,7 @@ squad-radio/
 │   ├── models.py             # Event / Broadcast 数据模型
 │   ├── password.py           # 每日密码缓存与数据源校验
 │   ├── persona.py            # 建筑师人格层与语义语气选择
-│   ├── rich.py               # KMarkdown 富文本排版与图片缩略图
+│   ├── rich.py               # KMarkdown 纯文字富文本排版
 │   ├── rules.py              # 触发规则与文案模板
 │   ├── sources.py            # 数据源适配器
 │   ├── storage.py            # SQLite 存储
