@@ -83,7 +83,10 @@ def test_reply_mentions_asker_and_uses_persona():
     persona = ArchitectPersona(PersonaConfig())
     text = build_reply(sample_data(), "1000000001", persona)
     assert "(met)1000000001(met)" in text
+    assert "(met)1000000001(met) ❤️" in text
     assert TODAY in text
+    assert "```" in text
+    assert "地图" in text and "密码" in text
     assert "8865" in text
     assert "AZ3" in text
     assert "指挥官" in text
@@ -139,6 +142,52 @@ def test_connect_recovers_from_expired_session(tmp_path, monkeypatch):
 def test_reply_without_password_uses_error_tone():
     persona = ArchitectPersona(PersonaConfig())
     text = build_reply(None, "1000000001", persona)
-    assert "(met)1000000001(met)" in text
+    assert "(met)1000000001(met) ❤️" in text
     assert "还没查到" in text
     assert "嘻嘻" not in text
+
+
+def test_stop_event_requests_graceful_shutdown(tmp_path):
+    bot = KookBot("dummy-token", state_path=tmp_path / "state.json")
+    assert bot.stopping is False
+    bot.stop()
+    assert bot.stopping is True
+    # 重复调用安全
+    bot.stop()
+    assert bot.stopping is True
+
+
+def test_signal_handlers_set_stop_event(tmp_path):
+    import signal as _signal
+
+    bot = KookBot("dummy-token", state_path=tmp_path / "state.json")
+    bot._install_signal_handlers()
+    try:
+        handler = _signal.getsignal(_signal.SIGTERM)
+        assert callable(handler)
+        handler(_signal.SIGTERM, None)
+        assert bot.stopping is True
+    finally:
+        bot._restore_signal_handlers()
+
+
+def test_run_loop_stops_and_saves_state_on_signal(tmp_path, monkeypatch):
+    """run() must exit on stop and persist state (no leaked threads/timers)."""
+    state_path = tmp_path / "state.json"
+    state_path.write_text(json.dumps({"sn": 7, "session_id": "s-7"}), encoding="utf-8")
+    bot = KookBot("dummy-token", state_path=state_path, bot_user_id="9000000001")
+
+    monkeypatch.setattr(bot, "refresh_password", lambda: None)
+
+    class FakeWS:
+        def settimeout(self, _v): pass
+        def recv(self):
+            bot.stop()  # 进入监听后立刻请求退出
+            raise websocket.WebSocketTimeoutException()
+        def close(self): pass
+
+    monkeypatch.setattr(bot, "_connect", lambda: FakeWS())
+    bot.run()
+
+    assert bot.stopping is True
+    assert json.loads(state_path.read_text(encoding="utf-8"))["sn"] == 7

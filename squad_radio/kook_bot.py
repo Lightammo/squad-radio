@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 import logging
 import random
+import signal
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -17,12 +19,16 @@ from typing import Any
 import websocket
 
 from .config import LOCAL_TZ, PersonaConfig
+from .health import HealthServer, HealthState
 from .kook import KookApiError, KookClient
 from .password import PasswordCache, PasswordData
 from .persona import ArchitectPersona, PersonaContext, Tone
-from .rich import RichStyle, format_password_card
+from .rich import RichStyle, format_password_card, format_password_table
 
 LOG = logging.getLogger("squad_radio.kook_bot")
+
+# 触发「今日密码」时，紧跟在 @ 提问人后面的回应表情。设为空字符串可关闭。
+REPLY_HEART = "❤️"
 
 
 def should_reply(event: dict[str, Any], bot_user_id: str | None, trigger: str) -> bool:
@@ -49,6 +55,8 @@ def build_reply(
     style: RichStyle | None = None,
 ) -> str:
     mention = f"(met){author_id}(met)"
+    if REPLY_HEART:
+        mention = f"{mention} {REPLY_HEART}"
     ctx_kwargs = dict(
         key=f"password-reply:{author_id}",
         mention=True,
@@ -68,7 +76,8 @@ def build_reply(
             style=style,
         )
 
-    body = data.lines() if data.lines() else ["数据暂不可用"]
+    table = format_password_table(data.entries)
+    body = [table] if table else ["数据暂不可用"]
     note = persona.render(
         "数据每天早上更新，以游戏内为准哦。",
         PersonaContext(tone=Tone.INFO, **ctx_kwargs),
@@ -92,6 +101,7 @@ class KookBot:
         trigger: str = "今日密码",
         bot_user_id: str | None = None,
         style: RichStyle | None = None,
+        health_port: int | None = None,
     ):
         self.client = KookClient(token)
         self.cache = password_cache or PasswordCache("data/password_cache.json")
@@ -102,6 +112,41 @@ class KookBot:
         self.style = style or RichStyle()
         self.last_sn = 0
         self.session_id: str | None = None
+        self._stop_event = threading.Event()
+        self._original_signals: dict[int, Any] = {}
+        self.state = HealthState()
+        self.health_port = health_port
+        self._health_server: HealthServer | None = None
+
+    def stop(self) -> None:
+        """Request a graceful shutdown (safe to call from a signal handler)."""
+        self._stop_event.set()
+
+    @property
+    def stopping(self) -> bool:
+        return self._stop_event.is_set()
+
+    def _install_signal_handlers(self) -> None:
+        """Translate SIGINT/SIGTERM into a stop request. Restorable on exit."""
+        def handler(signum, _frame):
+            LOG.info("收到信号 %s，请求优雅退出", signum)
+            self.stop()
+
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                self._original_signals[sig] = signal.getsignal(sig)
+                signal.signal(sig, handler)
+            except (ValueError, OSError):
+                # 非主线程无法注册信号处理器，忽略即可
+                LOG.debug("无法为信号 %s 注册处理器", sig)
+
+    def _restore_signal_handlers(self) -> None:
+        for sig, original in self._original_signals.items():
+            try:
+                signal.signal(sig, original)
+            except (ValueError, OSError):
+                pass
+        self._original_signals.clear()
 
     def _load_state(self) -> None:
         try:
@@ -166,6 +211,7 @@ class KookBot:
 
                 self.session_id = detail.get("session_id") or self.session_id
                 self._save_state()
+                self.state.mark_connected(True)
                 LOG.info("WebSocket 已连接，session=%s", self.session_id)
                 return ws
             except Exception:
@@ -185,10 +231,12 @@ class KookBot:
             return
         author_id = str(event["author_id"])
         channel_id = str(event["target_id"])
+        self.state.mark_event()
         data = self.cache.get()
         content = build_reply(data, author_id, self.persona, self.style)
         try:
             self.client.send_message(channel_id, content, msg_type=9)
+            self.state.mark_reply()
             LOG.info("已在频道 %s 回复用户 %s", channel_id, author_id)
         except KookApiError as exc:
             LOG.error("回复失败：code=%s message=%s", exc.code, exc.message)
@@ -199,7 +247,7 @@ class KookBot:
         pong_deadline: float | None = None
         current_date = datetime.now(LOCAL_TZ).date().isoformat()
 
-        while True:
+        while not self._stop_event.is_set():
             now_date = datetime.now(LOCAL_TZ).date().isoformat()
             if now_date != current_date:
                 current_date = now_date
@@ -239,6 +287,21 @@ class KookBot:
                 pong_deadline = current + 6
 
     def run(self) -> None:
+        self._stop_event.clear()
+        self._install_signal_handlers()
+        if self.health_port:
+            self._health_server = HealthServer(self.health_port, self.state)
+            self._health_server.start()
+        try:
+            self._run_loop()
+        finally:
+            self._restore_signal_handlers()
+            self._save_state()
+            if self._health_server is not None:
+                self._health_server.stop()
+            LOG.info("已保存状态，优雅退出完成")
+
+    def _run_loop(self) -> None:
         self._load_state()
         if self.bot_user_id is None:
             try:
@@ -248,15 +311,26 @@ class KookBot:
         self.refresh_password()
 
         backoff = 2
-        while True:
+        while not self._stop_event.is_set():
+            ws = None
             try:
                 ws = self._connect()
                 backoff = 2
                 self._listen(ws)
             except KeyboardInterrupt:
-                LOG.info("监听已停止")
-                return
+                LOG.info("收到键盘中断，请求退出")
+                self.stop()
             except Exception as exc:
+                if self._stop_event.is_set():
+                    break
+                self.state.mark_connected(False)
                 LOG.warning("连接中断：%s，%s 秒后重试", exc, backoff)
-                time.sleep(backoff)
+                # 用 event.wait 代替 sleep，让停止信号能立即唤醒
+                self._stop_event.wait(backoff)
                 backoff = min(backoff * 2, 60)
+            finally:
+                if ws is not None:
+                    try:
+                        ws.close()
+                    except Exception:
+                        pass

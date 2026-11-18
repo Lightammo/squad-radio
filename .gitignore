@@ -9,6 +9,7 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 *.log
+logs/
 
 # 运行时数据：缓存、状态、数据库都不要提交
 data/*.db

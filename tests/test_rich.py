@@ -1,8 +1,20 @@
 """Tests for KMarkdown text formatting."""
 from __future__ import annotations
 
+import unicodedata
+
 from squad_radio.models import Broadcast
-from squad_radio.rich import RichStyle, format_broadcast, format_password_card
+from squad_radio.rich import (
+    RichStyle,
+    _display_width,
+    format_broadcast,
+    format_password_card,
+    format_password_table,
+)
+
+
+def _cell_width(line: str) -> int:
+    return _display_width(line)
 
 
 def test_price_broadcast_has_title_spoiler_and_action():
@@ -49,6 +61,26 @@ def test_style_can_disable_splash_and_actions():
     assert "快捷指令" not in plain
     assert "**🔧 特勤处完工**" in plain
     assert "测试内容" in plain
+
+
+def test_password_table_aligns_columns_in_code_block():
+    table = format_password_table(
+        {"零号大坝": "8865", "长弓溪谷": "4565", "AZ3": "2430"}
+    )
+    assert table.startswith("```\n")
+    assert table.endswith("\n```")
+    body = table.splitlines()[1:-1]
+    assert body[0].startswith("地图") and "密码" in body[0]
+    assert "---" in body[1]
+    assert any("零号大坝" in row and "8865" in row for row in body)
+    # 中文名按 2 列计算，补齐后每行显示宽度一致
+    widths = {_cell_width(row) for row in body if "---" not in row}
+    assert len(widths) == 1
+    assert "![" not in table and "http" not in table
+
+
+def test_password_table_handles_empty_entries():
+    assert format_password_table({}) == ""
 
 
 def test_password_card_structure_has_no_image():

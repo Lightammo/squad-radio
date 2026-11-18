@@ -12,6 +12,7 @@ from .config import AppConfig, load_config
 from .engine import RadioEngine
 from .kook import KookApiError, KookClient
 from .kook_bot import KookBot
+from .log_setup import configure_logging
 from .password import PasswordCache
 from .rules import default_rules
 from .sources import JsonlSource, MockSource
@@ -110,6 +111,25 @@ def main() -> None:
     bot_parser.add_argument("--password-cache", default="data/password_cache.json")
     bot_parser.add_argument("--state-file", default="data/kook_bot_state.json")
     bot_parser.add_argument("--trigger", default="今日密码")
+    bot_parser.add_argument("--log-dir", help="日志目录，默认项目根下的 logs/")
+    bot_parser.add_argument(
+        "--max-log-mb",
+        type=float,
+        default=50.0,
+        help="日志目录总大小上限(MB)，超过自动删除最早的文件，默认 50",
+    )
+    bot_parser.add_argument(
+        "--log-console",
+        choices=("auto", "on", "off"),
+        default="auto",
+        help="是否同时打印到终端：auto 自动检测(默认) / on 强制开 / off 强制关",
+    )
+    bot_parser.add_argument(
+        "--health-port",
+        type=int,
+        default=None,
+        help="健康检查 HTTP 端口，如 8080；不设则关闭",
+    )
     _add_common(bot_parser)
 
     preview_parser = subparsers.add_parser(
@@ -137,10 +157,17 @@ def main() -> None:
             password_cache=cache,
             state_path=args.state_file,
             trigger=args.trigger,
+            health_port=args.health_port,
         )
-        logging.basicConfig(
-            level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+        console_choice = getattr(args, "log_console", "auto")
+        foreground = None if console_choice == "auto" else console_choice == "on"
+        max_log_mb = getattr(args, "max_log_mb", 50.0)
+        log_path = configure_logging(
+            getattr(args, "log_dir", None),
+            foreground=foreground,
+            max_log_mb=max_log_mb,
         )
+        logging.getLogger(__name__).info("Squad Radio 启动，日志：%s", log_path)
         bot.run()
         return
 

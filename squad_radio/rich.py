@@ -2,10 +2,12 @@
 
 KOOK KMarkdown supports bold, inline code, quotes, dividers, emoji, mentions
 ``(met)id(met)`` and spoilers ``(spl)..(spl)``. There is no inline image
-syntax (``![alt](url)``), so messages are deliberately text-only cards.
+syntax (``![alt](url)``) and no table syntax, so messages are text-only cards;
+the password list uses a fenced monospace code block as an aligned table.
 """
 from __future__ import annotations
 
+import unicodedata
 from dataclasses import dataclass
 
 from .models import Broadcast
@@ -66,6 +68,45 @@ def format_broadcast(broadcast: Broadcast, style: RichStyle | None = None) -> st
         parts.append("---")
         parts.append(f"快捷指令：{actions}")
     return "\n".join(parts)
+
+
+def _display_width(text: str) -> int:
+    """Width in monospace cells: East Asian wide/fullwidth chars take two."""
+    total = 0
+    for char in text:
+        if unicodedata.combining(char):
+            continue
+        total += 2 if unicodedata.east_asian_width(char) in ("W", "F") else 1
+    return total
+
+
+def _pad_right(text: str, width: int) -> str:
+    """Right-pad with spaces to the requested display width."""
+    return text + " " * max(0, width - _display_width(text))
+
+
+def format_password_table(entries: dict[str, str]) -> str:
+    """Render map/password pairs as an aligned table in a fenced code block.
+
+    KOOK KMarkdown has no native table syntax, but it does support fenced code
+    blocks rendered in a monospace font. Padding cells by *display* width keeps
+    the columns aligned even with Chinese map names mixed with ASCII digits.
+    """
+    if not entries:
+        return ""
+
+    name_width = max(_display_width(name) for name in entries)
+    code_width = max(_display_width(code) for code in entries.values())
+    name_width = max(name_width, _display_width("地图"))
+    code_width = max(code_width, _display_width("密码"))
+
+    def row(name: str, code: str) -> str:
+        return f"{_pad_right(name, name_width)}  {_pad_right(code, code_width)}"
+
+    divider = f"{'-' * name_width}  {'-' * code_width}"
+    body = [row("地图", "密码"), divider]
+    body.extend(row(name, code) for name, code in entries.items())
+    return "```\n" + "\n".join(body) + "\n```"
 
 
 def format_password_card(

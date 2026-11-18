@@ -54,4 +54,5 @@ if ($CheckOnly) {
 Write-Host "Starting Squad Radio KOOK listener..." -ForegroundColor Green
 & $python -m squad_radio.cli kook-bot `
     --password-cache $PasswordCache `
-    --state-file $StateFile
+    --state-file $StateFile `
+    --log-console on

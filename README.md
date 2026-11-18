@@ -112,10 +112,13 @@ python -m squad_radio.cli kook-gateway
 python -m squad_radio.cli kook-channels --guild <服务器ID>
 python -m squad_radio.cli kook-send --channel <文字频道ID> --text "测试"
 
-# 常驻监听「今日密码」并 @ 回复
+# 常驻监听「今日密码」并 @ 回复（日志写入 logs/，前台运行时同时打印到终端）
 python -m squad_radio.cli kook-bot \
   --password-cache data/password_cache.json \
   --state-file data/kook_bot_state.json
+#   --log-console on|off   # 强制打开/关闭终端输出，默认 auto 自动检测
+#   --log-dir /path/logs   # 自定义日志目录
+#   --max-log-mb 50        # 日志目录总大小上限(MB)，超过删最早的
 
 # Windows 本地一键启动（自动定位 .venv 与 .env.token）
 .\start.ps1
@@ -186,7 +189,8 @@ GET gateway(compress=0) → WebSocket → HELLO(s=1,code=0)
 
 所有发到 KOOK 的消息都经过 `squad_radio/rich.py` 排版，用官方文档支持的 KMarkdown 语法，而不是干巴巴的一行文字：
 
-- **结构化排版**：加粗标题 + 行内代码数值 + 分隔线 + 引用脚注
+- **今日密码表格**：KOOK KMarkdown 没有原生表格语法，所以用等宽代码块画出表格；按显示宽度补齐空格，中文地图名与数字密码列对齐不乱
+- **结构化排版**：加粗标题 + 分隔线 + 引用脚注
 - **@ 提问人**：用 KOOK 原生 `(met)用户ID(met)` 语法，真实触发提醒
 - **彩蛋**：用剧透语法 `(spl)...(spl)` 藏一句可点开的俏皮话，不占正文
 - **建筑师语气**：脚注仍由人格层生成，「指挥官 / 施工简报 / 请查收哦」照旧
@@ -195,14 +199,22 @@ GET gateway(compress=0) → WebSocket → HELLO(s=1,code=0)
 
 当前密码消息的实际效果：
 
-```text
+````text
 (met)用户ID(met) **今日作战密码 · 2026-11-18**
-零号大坝：`8865`   长弓溪谷：`4565`   巴克什：`6468`
-航天基地：`8572`   潮汐监狱：`2161`   AZ3：`2430`
+```
+地图      密码
+--------  ----
+零号大坝  8865
+长弓溪谷  4565
+巴克什    6468
+航天基地  8572
+潮汐监狱  2161
+AZ3       2430
+```
 (spl)记不住没关系，随时在群里喊「今日密码」(spl)         ← 点击展开
 ---
 > 早八施工简报，指挥官请查收哦。数据每天早上更新，以游戏内为准哦。
-```
+````
 
 本地预览（不发送）：
 
@@ -211,6 +223,24 @@ python -m squad_radio.cli preview
 ```
 
 调整美化程度（改 `squad_radio/rich.py` 的 `RichStyle`）：`show_splash` 关彩蛋、`show_actions` 关快捷指令提示。
+
+## 日志
+
+日志始终写入项目根目录下的 `logs/`，即使作为后台进程静默运行也不会丢记录：
+
+```text
+logs/squad-radio_20261118-223005_4321.log
+       └─项目名  └─启动时间戳   └─进程ID
+```
+
+- **后台运行**：只写文件，`stdout` 没有输出。
+- **前台运行**：自动检测交互式终端，文件 + 终端同时输出。
+- **自动清理**：`logs/` 目录总大小默认上限 **50MB**，超过就按修改时间删除最早的文件（当前正在写的日志始终保留）。运行中每 5 秒检查一次，启动时也会先清一遍历史堆积。
+  - CLI：`--max-log-mb 50` 调整上限，`--log-dir` 改目录。
+  - 云端入口 `main.py`：环境变量 `SQUAD_RADIO_MAX_LOG_MB=50`、`SQUAD_RADIO_LOG_DIR=/path/logs`。
+- 可用 `--log-console on|off` 强制开关终端输出，云端入口 `main.py` 自动检测，也可设环境变量 `SQUAD_RADIO_LOG_CONSOLE=on|off` 控制。
+
+日志文件已被 `.gitignore` 忽略，不会提交到仓库。
 
 ## 部署到服务器
 
