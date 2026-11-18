@@ -116,6 +116,11 @@ python -m squad_radio.cli kook-send --channel <文字频道ID> --text "测试"
 python -m squad_radio.cli kook-bot \
   --password-cache data/password_cache.json \
   --state-file data/kook_bot_state.json
+
+# Windows 本地一键启动（自动定位 .venv 与 .env.token）
+.\start.ps1
+.\start.ps1 -CheckOnly                 # 只检查环境，不启动
+# 若被执行策略拦截：powershell -ExecutionPolicy Bypass -File .\start.ps1
 ```
 
 JSONL 事件格式（每行一个事件）：
@@ -254,6 +259,7 @@ sudo journalctl -u squad-radio -f       # 看日志
 ```text
 squad-radio/
 ├── .env.example              # 环境变量模板
+├── start.ps1                 # Windows 本地一键启动脚本
 ├── config.example.toml       # 配置模板
 ├── pyproject.toml
 ├── requirements.txt
