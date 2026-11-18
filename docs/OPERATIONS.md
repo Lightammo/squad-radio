@@ -14,10 +14,21 @@
 ## 本地启动（Windows）
 
 ```
-start.ps1              # 前台启动，终端可见日志
-start.ps1 -CheckOnly   # 只检查环境
+deploy.ps1                       # 一键部署：后台常驻，装依赖/找 token/等连接
+deploy.ps1 -Status               # 状态：进程 + connected + 最新日志
+deploy.ps1 -Logs                 # 最新日志尾部 40 行
+deploy.ps1 -Stop                 # 停止
+deploy.ps1 -Restart              # 重启
+deploy.ps1 -Foreground           # 前台调试
+deploy.ps1 -InstallAutoStart     # 登录时自动启动（计划任务 SquadRadio）
+deploy.ps1 -UninstallAutoStart   # 取消自动启动
+
+start.ps1                        # 仅前台启动
+start.ps1 -CheckOnly             # 只检查环境
 ```
-Token 放 `.env.token` 或设 `KOOK_TOKEN`。`start.ps1` 会显式加 `--log-console on`。
+Token 放 `.env.token` 或设 `KOOK_TOKEN`；`deploy.ps1` 在两者都没有时会提示粘贴一次并写入 `.env.token`。
+`start.ps1` 前台显式加 `--log-console on`；`deploy.ps1` 后台用 `--log-console off`，日志只进 `logs/`。
+`deploy.ps1` 的 `-HealthPort` 默认 18082，`-MaxLogMb` 默认 50。
 
 ## CLI 启动
 
@@ -105,3 +116,4 @@ GET /healthz  →  200
 | WS 连上但没回复 | 确认 `target_id` 是文字频道 ID；看日志是否收到 `s=0` 事件 |
 | 密码是昨天的 | 上游未更新当天数据时会重试，不会拿旧密码冒充；稍后再问 |
 | Windows 本地测优雅关闭用 `os.kill(pid, SIGTERM)` 无效 | Windows 上该调用走 `TerminateProcess`，绕过 Python 处理器；用 Ctrl+C（SIGINT）或直接 `bot.stop()` 验证。Linux/容器内 SIGTERM 正常 |
+| `deploy.ps1` 等到 40s 仍 `connected=false` | 端点已起说明进程活着、在后台重试；看 `.\deploy.ps1 -Logs` 查 token 与网络。若连端点都没有，进程是启动即退出，改用 `.\deploy.ps1 -Foreground` 看报错 |

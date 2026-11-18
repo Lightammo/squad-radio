@@ -31,3 +31,14 @@ KOOK KMarkdown 不支持原生表格语法。用 fenced 代码块 + 按显示宽
 
 ## Token 安全红线
 Token 只从环境变量 / `.env.token` / `.env` 读取。`.gitignore` 忽略 `.env.*`、`*.token`、`config.toml`、运行时数据。提交前用 `git grep --cached` 扫描密钥。Git Bash 里传含 `/` 的 token 必须 `MSYS_NO_PATHCONV=1` 或用 token 文件。
+
+## 为什么 deploy.ps1 要自己给参数加引号
+`Start-Process -ArgumentList` 传字符串数组时用空格拼接，且**不会**为含空格的元素加引号。本项目路径包含 `Program Files (x86)`，直接传数组会把 `--token-file I:\Program Files (x86)\...` 拆成多个参数，argparse 报错、进程启动即退出。所以先用 `ConvertTo-ArgString` 把含空格/引号的参数包上双引号，再以**单条命令行字符串**传给 `-ArgumentList`。
+
+## 为什么 deploy.ps1 不用 -RedirectStandard*
+
+PowerShell 5.1 在准备重定向时会复制环境变量到大小写敏感的字典；机器上同时存在 `HTTPS_PROXY` 与 `https_proxy` 时直接抛"已添加项"异常，进程根本起不来。程序自己写 `logs/` 日志文件，stdout/stderr 不是必需，所以放弃重定向；启动失败时引导用户用 `-Foreground` 查看原始报错。
+
+## 为什么部署成功要等 connected=true
+
+健康检查端点起来 ≠ 机器人上线：进程可能停在 WS 握手或重连阶段。只等 HTTP 200 会把"端口起来了但没连上 KOOK"误报为成功。`deploy.ps1` 轮询 `/healthz` 直到 `connected=true`（最多 40s），并区分两种失败：端点已起但未连接（后台继续重试，给出日志指引）与端点都没起（打印日志尾部并退出 1）。

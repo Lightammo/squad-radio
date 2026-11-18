@@ -69,6 +69,36 @@ python -m pytest -q                    # 运行测试
 
 `demo` 会注入示例事件，直接展示物价异动、大红、每日密码、特勤处完成四类播报。
 
+## 一键部署（Windows）
+
+不想记命令就用一个脚本，它把「装环境 → 找 token → 停旧实例 → 后台启动 → 等 KOOK 连上」全做完：
+
+```powershell
+.\deploy.ps1                       # 一键部署（后台常驻，健康检查端口默认 18082）
+.\deploy.ps1 -Status               # 进程 / 连接状态 / 最新日志
+.\deploy.ps1 -Logs                 # 看最新日志尾部 40 行
+.\deploy.ps1 -Restart              # 重启
+.\deploy.ps1 -Stop                 # 停止
+.\deploy.ps1 -Foreground           # 前台运行，报错直接可见
+.\deploy.ps1 -InstallAutoStart     # 注册"登录时自动启动"（计划任务 SquadRadio）
+.\deploy.ps1 -UninstallAutoStart   # 取消自动启动
+
+# 被执行策略拦截时
+powershell -ExecutionPolicy Bypass -File .\deploy.ps1
+```
+
+它会自动处理这些事：
+
+- 没有 `.venv` 就创建，缺依赖就按 `requirements.txt` 安装
+- token 依次读 `KOOK_TOKEN` → `.env.token`；都没有就提示粘贴一次（输入隐藏），写入被 git 忽略的 `.env.token`
+- 启动前先停掉已在跑的实例，保证单实例
+- 后台隐藏运行，不占终端窗口，日志只写 `logs/`
+- **等到健康检查返回 `connected=true` 才算成功**，否则打印日志尾部并给出下一步提示
+
+可选参数：`-HealthPort 18082`（健康检查端口，`0` 关闭）、`-MaxLogMb 50`（日志总量上限）。
+
+`start.ps1` 仍保留，用于纯前台调试（`start.ps1 -CheckOnly` 只检查环境）。
+
 ## 配置
 
 复制 `config.example.toml` 为 `config.toml` 后按需修改（`config.toml` 已被 `.gitignore` 忽略）：
@@ -122,7 +152,13 @@ python -m squad_radio.cli kook-bot \
 #   --log-dir /path/logs   # 自定义日志目录
 #   --max-log-mb 50        # 日志目录总大小上限(MB)，超过删最早的
 
-# Windows 本地一键启动（自动定位 .venv 与 .env.token）
+# Windows 一键部署（后台常驻，自动装依赖/找 token/等 KOOK 连上）
+.\deploy.ps1
+.\deploy.ps1 -Status                   # 状态；另有 -Logs / -Stop / -Restart
+.\deploy.ps1 -InstallAutoStart         # 登录时自动启动
+# 若被执行策略拦截：powershell -ExecutionPolicy Bypass -File .\deploy.ps1
+
+# 纯前台调试启动
 .\start.ps1
 .\start.ps1 -CheckOnly                 # 只检查环境，不启动
 # 若被执行策略拦截：powershell -ExecutionPolicy Bypass -File .\start.ps1
@@ -291,7 +327,8 @@ sudo journalctl -u squad-radio -f       # 看日志
 ```text
 squad-radio/
 ├── .env.example              # 环境变量模板
-├── start.ps1                 # Windows 本地一键启动脚本
+├── deploy.ps1                # Windows 一键部署（后台常驻 + 状态/停止/日志/自启）
+├── start.ps1                 # Windows 前台启动脚本
 ├── config.example.toml       # 配置模板
 ├── pyproject.toml
 ├── requirements.txt

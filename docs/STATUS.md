@@ -15,7 +15,7 @@
 - ✅ 日志落盘 + 前台终端输出 + 50MB 自动清理 + 大小上限可配
 - ✅ 优雅关闭（SIGINT/SIGTERM），退出时保存状态、关闭 WS、停健康检查
 - ✅ 可选 HTTP 健康检查端点（`/healthz`），暴露运行态 JSON
-- ✅ 云端入口 `main.py`、Windows `start.ps1`、Dockerfile / compose
+- ✅ 云端入口 `main.py`、Windows `deploy.ps1`（一键部署/状态/停止/日志/登录自启）、`start.ps1`、Dockerfile / compose
 - ✅ GitHub Actions 测试流水线（3.11/3.12/3.13）
 - ✅ 精简的冒烟测试套件（只验证核心功能正常，不追求覆盖率；CI 跑 3.11/3.12/3.13）
 
