@@ -139,7 +139,62 @@ def main() -> None:
     preview_parser.add_argument("--user", default="1000000001")
     _add_common(preview_parser)
 
+    manufacture_parser = subparsers.add_parser(
+        "manufacture", help="Fetch hourly manufacture recommendations and optionally send to KOOK"
+    )
+    manufacture_parser.add_argument("--level", type=int, default=3)
+    manufacture_parser.add_argument(
+        "--rank-type", choices=("hour", "total"), default="hour"
+    )
+    manufacture_parser.add_argument("--top", type=int, default=1)
+    manufacture_parser.add_argument("--channel", help="KOOK 文字频道 ID；不填则只预览")
+    manufacture_parser.add_argument("--url", default=None, help="自定义看板地址")
+    _add_common(manufacture_parser)
+
     args = parser.parse_args()
+
+    if args.command == "manufacture":
+        from .manufacture import (
+            fetch_manufacture_recommendations,
+            format_manufacture_broadcast,
+            recommendations_to_json,
+        )
+
+        update, recommendations = fetch_manufacture_recommendations(
+            level=args.level,
+            rank_type=args.rank_type,
+            top_per_department=args.top,
+            url=args.url or "https://g.aitags.cn/manufacture",
+        )
+        content = format_manufacture_broadcast(
+            update,
+            recommendations,
+            level=args.level,
+            rank_type=args.rank_type,
+        )
+        if not args.channel:
+            print(recommendations_to_json(update, recommendations))
+            print("\n--- 播报预览 ---")
+            print(content)
+            return
+        client = _kook_client(args)
+        try:
+            result = client.send_message(args.channel, content, msg_type=9)
+        except KookApiError as exc:
+            print(f"KOOK 调用失败：code={exc.code} http={exc.http_status} message={exc.message}")
+            raise SystemExit(1) from exc
+        print(
+            json.dumps(
+                {
+                    "msg_id": result.get("msg_id"),
+                    "channel": args.channel,
+                    "update": update,
+                    "items": len(recommendations),
+                },
+                ensure_ascii=False,
+            )
+        )
+        return
 
     if args.command == "preview":
         from .kook_bot import build_reply

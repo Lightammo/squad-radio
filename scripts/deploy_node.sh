@@ -7,6 +7,7 @@
 #   ./scripts/deploy_node.sh restart
 #
 # 覆盖参数：HOST / PORT / SSH_USER / SSH_KEY / APP_DIR / HEALTH_PORT
+# MANUFACTURE_CHANNEL：云端特勤处制造小时播报频道，默认 2352172414970176；设 off/0 关闭
 # KEEP_TOKEN=1：只更新代码，保留云端现有 .env.token（本地测试 token 与云端机器人不同时用）
 # 走代理隧道（本地 14455 之类）：SSH_PROXY=socks5h://127.0.0.1:14455
 #   HOST=1.2.3.4 PORT=2222 SSH_KEY=~/.ssh/team_ed25519 ./scripts/deploy_node.sh
@@ -97,7 +98,7 @@ case "${ACTION}" in
         fi
 
         say "远端安装依赖并启动服务"
-        remote "APP_DIR='${APP_DIR}' SERVICE='${SERVICE}' HEALTH_PORT='${HEALTH_PORT}' bash '${APP_DIR}/scripts/remote_bootstrap.sh'"
+        remote "APP_DIR='${APP_DIR}' SERVICE='${SERVICE}' HEALTH_PORT='${HEALTH_PORT}' MANUFACTURE_CHANNEL='${MANUFACTURE_CHANNEL-2352172414970176}' MANUFACTURE_URL='${MANUFACTURE_URL:-https://g-aitags-cn.translate.goog/manufacture?_x_tr_sl=zh-CN&_x_tr_tl=en&_x_tr_hl=en}' PASSWORD_CHANNEL='${PASSWORD_CHANNEL-2352172414970176}' bash '${APP_DIR}/scripts/remote_bootstrap.sh'"
         ;;
     *)
         bad "未知动作：${ACTION}（可用：deploy | status | logs | restart）"

@@ -14,7 +14,9 @@ from pathlib import Path
 
 from squad_radio.kook_bot import KookBot
 from squad_radio.log_setup import configure_logging
+from squad_radio.manufacture_bot import start_scheduler_from_env
 from squad_radio.password import PasswordCache
+from squad_radio.password_bot import start_scheduler_from_env as start_password_scheduler
 
 # main.py 就躺在项目根目录，所以 ROOT 是它自己的目录（不是上一级）。
 # 允许用 SQUAD_RADIO_HOME 覆盖，方便代码与数据分开放置。
@@ -116,6 +118,10 @@ def main() -> None:
         max_log_mb=_log_max_mb(),
     )
     logging.getLogger(__name__).info("Squad Radio 启动，日志：%s", log_path)
+    token = resolve_token()
+    if token:
+        start_scheduler_from_env(token, ROOT)
+        start_password_scheduler(token, ROOT)
     build_bot(health_port=_health_port(), health_host=_health_host()).run()
 
 

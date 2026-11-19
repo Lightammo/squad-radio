@@ -6,6 +6,28 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-/opt/squad-radio}"
 SERVICE="${SERVICE:-squad-radio}"
 HEALTH_PORT="${HEALTH_PORT:-18082}"
+# 默认在云端开启特勤处制造小时播报；MANUFACTURE_CHANNEL=off/0/空 可关闭。
+MANUFACTURE_CHANNEL="${MANUFACTURE_CHANNEL-2352172414970176}"
+# 海外节点直连 g.aitags.cn 会超时，默认走 Google Translate 代理取同一份 HTML。
+MANUFACTURE_URL="${MANUFACTURE_URL:-https://g-aitags-cn.translate.goog/manufacture?_x_tr_sl=zh-CN&_x_tr_tl=en&_x_tr_hl=en}"
+if [ -z "${MANUFACTURE_CHANNEL}" ] || [ "${MANUFACTURE_CHANNEL}" = "off" ] || [ "${MANUFACTURE_CHANNEL}" = "0" ]; then
+    MFG_ENV_LINE=""
+    MFG_EXPORT_LINE=""
+else
+    MFG_ENV_LINE="Environment=SQUAD_RADIO_MANUFACTURE_CHANNEL=${MANUFACTURE_CHANNEL}
+Environment=SQUAD_RADIO_MANUFACTURE_URL=${MANUFACTURE_URL}"
+    MFG_EXPORT_LINE="export SQUAD_RADIO_MANUFACTURE_CHANNEL=\"${MANUFACTURE_CHANNEL}\"
+export SQUAD_RADIO_MANUFACTURE_URL=\"${MANUFACTURE_URL}\""
+fi
+# 默认在云端开启「今日密码」每天 0 点播报；PASSWORD_CHANNEL=off/0/空 可关闭。
+PASSWORD_CHANNEL="${PASSWORD_CHANNEL-2352172414970176}"
+if [ -z "${PASSWORD_CHANNEL}" ] || [ "${PASSWORD_CHANNEL}" = "off" ] || [ "${PASSWORD_CHANNEL}" = "0" ]; then
+    PW_ENV_LINE=""
+    PW_EXPORT_LINE=""
+else
+    PW_ENV_LINE="Environment=SQUAD_RADIO_PASSWORD_CHANNEL=${PASSWORD_CHANNEL}"
+    PW_EXPORT_LINE="export SQUAD_RADIO_PASSWORD_CHANNEL=\"${PASSWORD_CHANNEL}\""
+fi
 PY="${APP_DIR}/.venv/bin/python"
 UNIT="/etc/systemd/system/${SERVICE}.service"
 
@@ -85,6 +107,8 @@ Environment=SQUAD_RADIO_LOG_DIR=${APP_DIR}/logs
 Environment=SQUAD_RADIO_MAX_LOG_MB=50
 Environment=SQUAD_RADIO_HEALTH_PORT=${HEALTH_PORT}
 Environment=SQUAD_RADIO_HEALTH_HOST=127.0.0.1
+${MFG_ENV_LINE}
+${PW_ENV_LINE}
 Restart=always
 RestartSec=10
 KillSignal=SIGTERM
@@ -113,6 +137,8 @@ export SQUAD_RADIO_LOG_DIR="${APP_DIR}/logs"
 export SQUAD_RADIO_MAX_LOG_MB=50
 export SQUAD_RADIO_HEALTH_PORT=${HEALTH_PORT}
 export SQUAD_RADIO_HEALTH_HOST=127.0.0.1
+${MFG_EXPORT_LINE}
+${PW_EXPORT_LINE}
 while true; do
     "${PY}" main.py
     echo "[\$(date '+%F %T')] main.py 退出（code \$?），10 秒后重启" >> "${APP_DIR}/logs/supervisor.log"

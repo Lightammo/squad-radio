@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import websocket
 
 from squad_radio.config import PersonaConfig
+from squad_radio.daily_broadcast import build_broadcast
 from squad_radio.kook import KookApiError, KookClient
 from squad_radio.kook_bot import (
     REACTION_HEART,
@@ -63,6 +64,17 @@ def test_trigger_and_reply():
     assert "🗺" in text and "🔑" in text and "8865" in text and "ＡＺ３" in text
     assert "零号大坝" in text and "｜" in text
     assert "指挥官" in text and "嘻嘻" not in text
+
+
+def test_daily_broadcast_uses_persona_footnote():
+    """定时播报脚注必须走人格层，与实时回复链路文案一致（早八施工简报…多关照）。"""
+    out = build_broadcast(sample_data())
+    assert "早八施工简报，指挥官请查收哦。" in out
+    assert "今天也请多关照哦。" in out
+    assert "数据每天早上更新，以游戏内为准哦。" in out
+    # 面向整个频道，不带 @ 提及
+    assert "(met)" not in out and "❤️" not in out
+    assert "```" in out and "零号大坝" in out
 
 
 def test_text_fallback_normalizes_az3():

@@ -47,6 +47,9 @@
 - **建筑师人格层**
   - 按事件语义选语气：出红/问候用幸运台词，物价用提醒语气，错误用"图纸对不上"式道歉
   - 强度可配：`off` / `light` / `normal` / `full`
+- **特勤处制造推荐**
+  - 从 `https://g.aitags.cn/manufacture` 抓取三级制造利润榜，按小时利润取各制造台 Top1 生成播报
+  - 测试阶段每小时播报到指定 KOOK 频道；数据源页面注明接口每 30 分钟更新
 
 ## 快速开始
 
@@ -138,6 +141,10 @@ python -m squad_radio.cli demo                          # 演示完整链路
 python -m squad_radio.cli ingest-jsonl --path data/events.example.jsonl
 python -m squad_radio.cli command --group demo --user 10001 --text "订阅 钛合金 12 30"
 python -m squad_radio.cli status                        # 查看本地状态
+
+# 特勤处制造推荐（不填 --channel 只预览）
+python -m squad_radio.cli manufacture --top 1
+python -m squad_radio.cli manufacture --top 1 --channel <文字频道ID> --token-file .env.token
 
 # KOOK 连通性自检
 python -m squad_radio.cli kook-gateway
