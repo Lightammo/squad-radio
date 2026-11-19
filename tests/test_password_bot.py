@@ -7,11 +7,18 @@ from datetime import datetime, timezone
 import websocket
 
 from squad_radio.config import PersonaConfig
-from squad_radio.kook_bot import KookBot, build_reply, should_reply
+from squad_radio.kook import KookApiError, KookClient
+from squad_radio.kook_bot import (
+    REACTION_HEART,
+    KookBot,
+    build_reply,
+    should_reply,
+)
 from squad_radio.password import (
     PasswordCache,
     PasswordData,
     parse_json_payload,
+    parse_reader_payload,
     parse_text_payload,
 )
 from squad_radio.persona import ArchitectPersona
@@ -80,6 +87,40 @@ def test_text_fallback_normalizes_az3():
                               "2026-11-19", "x") is None
     # 日期不符 -> 无效，不能拿昨天的密码冒充今天
     assert parse_text_payload(text, "2026-11-20", "x") is None
+
+
+def test_reader_proxy_fallback_when_primary_times_out(tmp_path, monkeypatch):
+    """主源超时（海外节点）时经 reader 代理取同一份 JSON，仍严格校验日期。"""
+    raw = {"date": TODAY, "entries": CODES, "sourceMode": "kkrb"}
+    wrapped = (
+        "Title: \n\nURL Source: https://db.18183.com/x.json\n\n"
+        "Published Time: Wed, 18 Nov 2026 16:30:04 GMT\n\n"
+        "Markdown Content:\n" + json.dumps(raw, ensure_ascii=False) + "\n"
+    )
+    assert parse_reader_payload(wrapped) == raw
+    assert parse_reader_payload("no json here") is None
+
+    cache = PasswordCache(tmp_path / "pw.json")
+    attempted: list[str] = []
+
+    def fake_get(url):
+        attempted.append(url)
+        if url == cache.url_template.replace("{date}", TODAY):
+            raise OSError("timed out")  # 主源直连失败
+        if url == cache.reader_prefix + cache.url_template.replace("{date}", TODAY):
+            return wrapped  # 代理拿到主源
+        raise AssertionError(f"unexpected url: {url}")
+
+    monkeypatch.setattr(cache, "_get", fake_get)
+    data = cache.fetch(TODAY)
+    assert data is not None and data.entries == CODES
+    assert data.source == cache.url_template.replace("{date}", TODAY)
+    assert len(attempted) == 2
+
+    # 代理拿到的 JSON 日期不符时不能冒充当日密码
+    wrong = wrapped.replace(TODAY, "2026-11-17")
+    monkeypatch.setattr(cache, "_get", lambda url: wrong)
+    assert cache.fetch(TODAY) is None
 
 
 def test_password_daily_cache(tmp_path, monkeypatch):
@@ -194,3 +235,99 @@ def test_graceful_shutdown(tmp_path, monkeypatch):
     runner.run()
     assert runner.stopping is True
     assert json.loads(state_path.read_text(encoding="utf-8"))["sn"] == 7
+
+
+def test_add_reaction_posts_correct_payload(monkeypatch):
+    """add-reaction 用 msg_id + emoji 走 POST，频道与私聊各自用对端点。"""
+    client = KookClient("dummy-token")
+    calls: list[tuple[str, str, dict]] = []
+
+    def fake_request(method, path, *, params=None, payload=None):
+        calls.append((method, path, payload or {}))
+        return {}
+
+    monkeypatch.setattr(client, "_request", fake_request)
+
+    client.add_reaction("msg-1", "❤")
+    assert calls[-1] == (
+        "POST",
+        "/message/add-reaction",
+        {"msg_id": "msg-1", "emoji": "❤"},
+    )
+
+    client.add_reaction("msg-2", "❤", direct=True)
+    assert calls[-1] == (
+        "POST",
+        "/direct-message/add-reaction",
+        {"msg_id": "msg-2", "emoji": "❤"},
+    )
+
+
+def test_handle_event_adds_heart_reaction(monkeypatch):
+    """用户发「今日密码」时，除文字回复外还要给该消息加爱心 reaction。"""
+    bot = KookBot("dummy-token", bot_user_id="9000000001")
+    monkeypatch.setattr(bot.cache, "get", lambda: sample_data())
+
+    sent: list[tuple] = []
+    reacted: list[tuple] = []
+    monkeypatch.setattr(bot.client, "send_message", lambda *a, **kw: sent.append((a, kw)))
+    monkeypatch.setattr(bot.client, "add_reaction", lambda *a, **kw: reacted.append((a, kw)))
+
+    event = {
+        "type": 9,
+        "channel_type": "GROUP",
+        "target_id": "channel-1",
+        "author_id": "1000000001",
+        "content": "今日密码",
+        "msg_id": "msg-xyz",
+        "extra": {"author": {"bot": False}},
+    }
+    bot.handle_event(event)
+
+    assert len(sent) == 1
+    assert len(reacted) == 1
+    args, kwargs = reacted[0]
+    assert args == ("msg-xyz", REACTION_HEART)
+    assert kwargs == {"direct": False}
+    assert bot.state.replies_sent >= 1
+
+
+def test_handle_event_skips_reaction_when_no_msg_id(monkeypatch):
+    """事件缺 msg_id 时不能崩，也不能调用 add-reaction。"""
+    bot = KookBot("dummy-token", bot_user_id="9000000001")
+    monkeypatch.setattr(bot.cache, "get", lambda: sample_data())
+    monkeypatch.setattr(bot.client, "send_message", lambda *a, **kw: None)
+
+    reacted: list = []
+    monkeypatch.setattr(bot.client, "add_reaction", lambda *a, **kw: reacted.append((a, kw)))
+
+    bot.handle_event({
+        "type": 9,
+        "target_id": "channel-1",
+        "author_id": "1000000001",
+        "content": "今日密码",
+        "extra": {"author": {"bot": False}},
+    })
+    assert reacted == []
+
+
+def test_reaction_failure_does_not_break_reply(monkeypatch):
+    """加 reaction 报 API 错误时，文字回复仍已完成、不向外抛异常。"""
+    bot = KookBot("dummy-token", bot_user_id="9000000001")
+    monkeypatch.setattr(bot.cache, "get", lambda: sample_data())
+    monkeypatch.setattr(bot.client, "send_message", lambda *a, **kw: None)
+
+    def fail_reaction(*_a, **_kw):
+        raise KookApiError(403, "no permission")
+
+    monkeypatch.setattr(bot.client, "add_reaction", fail_reaction)
+
+    bot.handle_event({
+        "type": 9,
+        "channel_type": "GROUP",
+        "target_id": "channel-1",
+        "author_id": "1000000001",
+        "content": "今日密码",
+        "msg_id": "msg-xyz",
+        "extra": {"author": {"bot": False}},
+    })  # 不应抛异常

@@ -28,6 +28,15 @@ WebSocket 连接
 - `type=9` 才是 KMarkdown；`(met)用户ID(met)` 的 @ 只有 KMarkdown 下生效。
 - 每个开发者账号所有机器人**每日 10,000 条**，北京时间 12:00 重置。
 
+## 给消息加回应（reaction）
+
+- 频道消息：`POST /api/v3/message/add-reaction`，私聊消息：`POST /api/v3/direct-message/add-reaction`。
+- body 为 `{"msg_id": "<触发消息 id>", "emoji": "<emoji id>"}`；成功返回 `code: 0`，无业务数据。
+- emoji id：服务器自定义表情用其 id，KOOK 标准 Unicode 表情用码点字符本身（爱心 `❤` = U+2764，不带 VS16）。
+- 用户发「今日密码」时，机器人除文字回复外，还会用触发事件的 `msg_id` 给该消息加一个爱心 reaction；
+  这一步失败（如无权限）只记日志，不影响文字回复。可用构造参数 `reaction_emoji=""` 关闭。
+- `add-reaction` 不计入每日 10,000 条消息配额。
+
 ## KMarkdown 能力
 
 支持：加粗 `**`、行内代码 `` ` ``、引用 `>`、分隔线 `---`、@ `(met)id(met)`、剧透 `(spl)..(spl)`、emoji、fenced 代码块 ``` ``` ```。

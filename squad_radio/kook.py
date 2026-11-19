@@ -121,6 +121,26 @@ class KookClient:
         data = self._request("POST", "/message/create", payload=payload)
         return dict(data or {})
 
+    def add_reaction(
+        self,
+        msg_id: str,
+        emoji: str,
+        *,
+        direct: bool = False,
+    ) -> None:
+        """给某条消息添加一个回应（reaction）。
+
+        频道消息走 ``/message/add-reaction``，私聊消息走
+        ``/direct-message/add-reaction``；两者 body 均为 ``msg_id`` + ``emoji``。
+        ``emoji`` 为 emoji 的 id，可以是服务器自定义表情 id，也可以是
+        Unicode emoji 本身（KOOK 标准表情用码点字符，如 ❤ = U+2764）。
+        接口无返回数据，失败时由 ``_request`` 抛 ``KookApiError``。
+        """
+        path = "/direct-message/add-reaction" if direct else "/message/add-reaction"
+        payload: dict[str, Any] = {"msg_id": msg_id, "emoji": emoji}
+        self._request("POST", path, payload=payload)
+
+
 class KookBroadcaster(Broadcaster):
     """Send Squad Radio broadcasts into a KOOK text channel."""
 

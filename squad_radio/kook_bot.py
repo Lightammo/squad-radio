@@ -27,8 +27,13 @@ from .rich import RichStyle, format_password_card, format_password_table
 
 LOG = logging.getLogger("squad_radio.kook_bot")
 
-# 触发「今日密码」时，紧跟在 @ 提问人后面的回应表情。设为空字符串可关闭。
+# 触发「今日密码」时，紧跟在 @ 提问人后面的回应表情（回复正文里的文字 emoji）。
 REPLY_HEART = "❤️"
+
+# 真正添加到用户「今日密码」消息上的 reaction emoji id。
+# KOOK 标准 Unicode 表情用码点字符本身作为 id：❤ = U+2764（不带 VS16）。
+# 设为空字符串可关闭 reaction（不影响回复正文里的 REPLY_HEART）。
+REACTION_HEART = "❤"
 
 
 def should_reply(event: dict[str, Any], bot_user_id: str | None, trigger: str) -> bool:
@@ -101,6 +106,7 @@ class KookBot:
         trigger: str = "今日密码",
         bot_user_id: str | None = None,
         style: RichStyle | None = None,
+        reaction_emoji: str | None = None,
         health_port: int | None = None,
         health_host: str = "0.0.0.0",
     ):
@@ -111,6 +117,8 @@ class KookBot:
         self.trigger = trigger
         self.bot_user_id = bot_user_id
         self.style = style or RichStyle()
+        # None 表示使用默认爱心；显式传入 "" 可关闭 reaction。
+        self.reaction_emoji = REACTION_HEART if reaction_emoji is None else reaction_emoji
         self.last_sn = 0
         self.session_id: str | None = None
         self._stop_event = threading.Event()
@@ -233,6 +241,7 @@ class KookBot:
             return
         author_id = str(event["author_id"])
         channel_id = str(event["target_id"])
+        msg_id = str(event.get("msg_id") or "")
         self.state.mark_event()
         data = self.cache.get()
         content = build_reply(data, author_id, self.persona, self.style)
@@ -242,6 +251,24 @@ class KookBot:
             LOG.info("已在频道 %s 回复用户 %s", channel_id, author_id)
         except KookApiError as exc:
             LOG.error("回复失败：code=%s message=%s", exc.code, exc.message)
+
+        self._add_heart_reaction(event, msg_id)
+
+    def _add_heart_reaction(self, event: dict[str, Any], msg_id: str) -> None:
+        """在触发消息上加一个爱心回应；失败只记日志，不影响正文回复。"""
+        if not self.reaction_emoji:
+            return
+        if not msg_id:
+            LOG.debug("触发消息缺少 msg_id，跳过爱心回应")
+            return
+        direct = str(event.get("channel_type") or "").upper() == "PERSON"
+        try:
+            self.client.add_reaction(msg_id, self.reaction_emoji, direct=direct)
+            LOG.info("已给消息 %s 添加爱心回应", msg_id)
+        except KookApiError as exc:
+            LOG.warning(
+                "添加爱心回应失败：code=%s message=%s", exc.code, exc.message
+            )
 
     def _listen(self, ws: websocket.WebSocket) -> None:
         heartbeat = 30 + random.randint(-5, 5)

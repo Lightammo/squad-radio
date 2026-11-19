@@ -18,6 +18,10 @@ from .config import LOCAL_TZ
 
 DEFAULT_PASSWORD_URL = "https://db.18183.com/sjzmm/data/daily/{date}.json"
 FALLBACK_PASSWORD_URL = "https://www.tmini.net/api/sjzmm?ckey=&type="
+# 海外节点（如泰国）直连国内 CDN 常 8s 超时，而此时备源 tmini 还停留在昨天，
+# 导致跨零点后整晚拿不到当日密码。用公开 reader 代理转发同一主源 JSON 作为兜底：
+# 它返回 "Markdown Content:\n{...}" 文本，需从中抽出 JSON 再走同样的严格校验。
+READER_PROXY_PREFIX = "https://r.jina.ai/"
 REQUIRED_MAPS = ("零号大坝", "长弓溪谷", "巴克什", "航天基地", "潮汐监狱", "AZ3")
 
 
@@ -47,6 +51,24 @@ class PasswordData:
             )
         except (KeyError, TypeError, ValueError):
             return None
+
+
+def parse_reader_payload(text: str) -> dict[str, Any] | None:
+    """从 reader 代理的包装文本中抽出 JSON 对象（Markdown Content 段）。"""
+    marker = "Markdown Content:"
+    body = text.split(marker, 1)[1] if marker in text else text
+    start = body.find("{")
+    if start < 0:
+        return None
+    try:
+        raw = json.loads(body[start:])
+    except (ValueError, TypeError):
+        # 代理有时会在 JSON 后附带额外说明文字，退一步用 raw_decode 精确截断
+        try:
+            raw, _ = json.JSONDecoder().raw_decode(body[start:])
+        except (ValueError, TypeError):
+            return None
+    return raw if isinstance(raw, dict) else None
 
 
 def _valid_entries(entries: dict[str, str]) -> bool:
@@ -100,11 +122,13 @@ class PasswordCache:
         path: str | Path,
         url_template: str = DEFAULT_PASSWORD_URL,
         fallback_url: str = FALLBACK_PASSWORD_URL,
+        reader_prefix: str = READER_PROXY_PREFIX,
         timeout: int = 8,
     ):
         self.path = Path(path)
         self.url_template = url_template
         self.fallback_url = fallback_url
+        self.reader_prefix = reader_prefix
         self.timeout = timeout
 
     def _read(self) -> PasswordData | None:
@@ -135,6 +159,18 @@ class PasswordCache:
                 return data
         except (OSError, ValueError, TypeError):
             pass
+
+        # 主源超时（海外节点直连国内 CDN）时，经 reader 代理取同一份 JSON。
+        # 代理内容与主源完全一致，仍经过 parse_json_payload 的日期+六图校验。
+        if self.reader_prefix:
+            try:
+                raw = parse_reader_payload(self._get(self.reader_prefix + primary))
+                if raw:
+                    data = parse_json_payload(raw, date, primary)
+                    if data:
+                        return data
+            except (OSError, ValueError, TypeError):
+                pass
 
         if self.fallback_url:
             try:

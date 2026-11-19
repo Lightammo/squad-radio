@@ -54,7 +54,7 @@
 | `kook_bot.py` | `KookBot` | WS 常驻：握手、心跳、resume、优雅关闭、状态更新、触发回复 |
 | `kook_bot.py` | `should_reply` | 纯函数判断是否触发（真人、非 bot、含触发词） |
 | `kook_bot.py` | `build_reply` | 组装回复：@ + ❤️ + 标题 + 表格 + 彩蛋 + 脚注 |
-| `password.py` | `PasswordCache` | 按北京时间日期缓存，主源 JSON / 备源文本，跨零点刷新 |
+| `password.py` | `PasswordCache` | 按北京时间日期缓存，主源 JSON（直连超时则走 reader 代理取同一 JSON）/ 备源文本，跨零点刷新 |
 | `rich.py` | `format_password_table` | 全角补齐 + ｜ 单分隔符的代码块表格，左侧等宽 |
 | `persona.py` | `ArchitectPersona` | 按语义选语气，包装文案 |
 | `log_setup.py` | `configure_logging` | 文件 handler（始终）+ 终端 handler（前台），启动时 + 运行中清理旧日志 |
