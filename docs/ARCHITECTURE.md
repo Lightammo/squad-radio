@@ -55,7 +55,7 @@
 | `kook_bot.py` | `should_reply` | 纯函数判断是否触发（真人、非 bot、含触发词） |
 | `kook_bot.py` | `build_reply` | 组装回复：@ + ❤️ + 标题 + 表格 + 彩蛋 + 脚注 |
 | `password.py` | `PasswordCache` | 按北京时间日期缓存，主源 JSON / 备源文本，跨零点刷新 |
-| `rich.py` | `format_password_table` | 等宽代码块表格，中文按 2 列补齐 |
+| `rich.py` | `format_password_table` | 全角补齐 + ｜ 单分隔符的代码块表格，左侧等宽 |
 | `persona.py` | `ArchitectPersona` | 按语义选语气，包装文案 |
 | `log_setup.py` | `configure_logging` | 文件 handler（始终）+ 终端 handler（前台），启动时 + 运行中清理旧日志 |
 | `health.py` | `HealthServer` / `HealthState` | 可选 HTTP 探针，暴露连接态/运行时长/回复数 |

@@ -76,14 +76,14 @@ def parse_text_payload(text: str, date: str, url: str) -> PasswordData | None:
         return None
     pairs = re.findall(r"地图名称:\s*(.+?)\n密码:\s*(\d{4})", text)
     entries = {name.strip(): code for name, code in pairs}
-    if not _valid_entries(entries):
-        return None
+    # 注意：不能在这里用 _valid_entries 直接校验，备源把 AZ3 写作「AZ3核电站」，
+    # 必须先归一化再校验，否则备源永远返回 None（2026-11-19 修复）。
     normalized = {}
     for name in REQUIRED_MAPS:
         if name == "AZ3":
             normalized[name] = entries.get("AZ3核电站", entries.get("AZ3", ""))
         else:
-            normalized[name] = entries[name]
+            normalized[name] = entries.get(name, "")
     if not _valid_entries(normalized):
         return None
     return PasswordData(

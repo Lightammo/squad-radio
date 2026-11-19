@@ -282,6 +282,30 @@ logs/squad-radio_20261118-223005_4321.log
 
 ## 部署到服务器
 
+### 一条命令部署（任意外网 Linux 主机）
+
+本机（Git Bash / macOS / Linux）执行，脚本会打包上传、装依赖、建 venv、写 systemd 单元、启动并**等到 KOOK 真正连上**才返回：
+
+```bash
+./scripts/deploy_node.sh                    # 部署到默认节点（见脚本顶部 HOST/PORT）
+./scripts/deploy_node.sh status             # 服务状态 + 健康检查
+./scripts/deploy_node.sh logs               # 最近 60 行日志
+./scripts/deploy_node.sh restart
+
+# 换机器 / 换端口 / 换密钥
+HOST=1.2.3.4 PORT=2222 SSH_KEY=~/.ssh/team_ed25519 ./scripts/deploy_node.sh
+
+# 直连被墙（TCP 超时）时走本地代理隧道，支持 socks5/socks5h/http
+SSH_PROXY=socks5h://127.0.0.1:14455 ./scripts/deploy_node.sh
+```
+
+- 代码落在 `/opt/squad-radio`，服务名 `squad-radio`，健康端点只监听 `127.0.0.1:18082/healthz`。
+- Token 从本机 `.env.token` 读取，远端写成 `/opt/squad-radio/.env.token`（600），不进 tar 包。
+- 远端没有 systemd（裸容器）时自动改用 `run_forever.sh` 自愈循环：进程异常退出 10 秒后拉起，但**容器重启后需重新执行一次部署脚本**。
+- 代理隧道由 `scripts/ssh_proxy.py` 提供（纯标准库实现 HTTP CONNECT / SOCKS5，可直接当 SSH 的 `ProxyCommand`）。
+
+### 手动部署
+
 以一台装好 Python 3.11+ 的 Linux 服务器为例：
 
 ```bash

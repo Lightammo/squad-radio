@@ -102,6 +102,7 @@ class KookBot:
         bot_user_id: str | None = None,
         style: RichStyle | None = None,
         health_port: int | None = None,
+        health_host: str = "0.0.0.0",
     ):
         self.client = KookClient(token)
         self.cache = password_cache or PasswordCache("data/password_cache.json")
@@ -116,6 +117,7 @@ class KookBot:
         self._original_signals: dict[int, Any] = {}
         self.state = HealthState()
         self.health_port = health_port
+        self.health_host = health_host
         self._health_server: HealthServer | None = None
 
     def stop(self) -> None:
@@ -290,7 +292,7 @@ class KookBot:
         self._stop_event.clear()
         self._install_signal_handlers()
         if self.health_port:
-            self._health_server = HealthServer(self.health_port, self.state)
+            self._health_server = HealthServer(self.health_port, self.state, host=self.health_host)
             self._health_server.start()
         try:
             self._run_loop()

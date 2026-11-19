@@ -46,6 +46,19 @@ python -m squad_radio.cli kook-bot \
 
 ## 云端（systemd）
 
+一键部署（本机执行，含上传/装依赖/systemd/健康自检）：
+
+```bash
+./scripts/deploy_node.sh            # deploy | status | logs | restart
+HOST=1.2.3.4 PORT=2222 SSH_KEY=~/.ssh/team_ed25519 ./scripts/deploy_node.sh
+```
+
+- 应用目录 `/opt/squad-radio`，服务 `squad-radio`，健康端点 `127.0.0.1:18082/healthz`。
+- `main.py` 的 `ROOT` 默认是它**自己所在目录**（项目根），可用 `SQUAD_RADIO_HOME` 覆盖；
+  `.env.token`、`data/`、`logs/` 都相对它解析，因此与启动时的 `cwd` 无关。
+
+手动写单元：
+
 ```ini
 [Unit]
 Description=Squad Radio KOOK Bot

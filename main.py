@@ -16,7 +16,10 @@ from squad_radio.kook_bot import KookBot
 from squad_radio.log_setup import configure_logging
 from squad_radio.password import PasswordCache
 
-ROOT = Path(__file__).resolve().parent.parent
+# main.py 就躺在项目根目录，所以 ROOT 是它自己的目录（不是上一级）。
+# 允许用 SQUAD_RADIO_HOME 覆盖，方便代码与数据分开放置。
+_DEFAULT_ROOT = Path(__file__).resolve().parent
+ROOT = Path(os.environ.get("SQUAD_RADIO_HOME") or _DEFAULT_ROOT).resolve()
 
 
 def _read_token_file(path: Path) -> str:
@@ -48,7 +51,7 @@ def resolve_token() -> str:
     return ""
 
 
-def build_bot(health_port: int | None = None) -> KookBot:
+def build_bot(health_port: int | None = None, health_host: str = "127.0.0.1") -> KookBot:
     """Construct the bot with cloud-safe absolute paths."""
     token = resolve_token()
     if not token:
@@ -63,6 +66,7 @@ def build_bot(health_port: int | None = None) -> KookBot:
         password_cache=PasswordCache(data_dir / "password_cache.json"),
         state_path=data_dir / "kook_bot_state.json",
         health_port=health_port,
+        health_host=health_host,
     )
 
 
@@ -99,6 +103,12 @@ def _health_port() -> int | None:
         return None
 
 
+def _health_host() -> str:
+    """健康端点默认只监听回环，避免公网机器把状态接口暴露出去。"""
+    value = (os.environ.get("SQUAD_RADIO_HEALTH_HOST") or "").strip()
+    return value or "127.0.0.1"
+
+
 def main() -> None:
     log_path = configure_logging(
         os.environ.get("SQUAD_RADIO_LOG_DIR") or None,
@@ -106,7 +116,7 @@ def main() -> None:
         max_log_mb=_log_max_mb(),
     )
     logging.getLogger(__name__).info("Squad Radio 启动，日志：%s", log_path)
-    build_bot(health_port=_health_port()).run()
+    build_bot(health_port=_health_port(), health_host=_health_host()).run()
 
 
 if __name__ == "__main__":

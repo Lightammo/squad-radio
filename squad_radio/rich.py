@@ -3,11 +3,10 @@
 KOOK KMarkdown supports bold, inline code, quotes, dividers, emoji, mentions
 ``(met)id(met)`` and spoilers ``(spl)..(spl)``. There is no inline image
 syntax (``![alt](url)``) and no table syntax, so messages are text-only cards;
-the password list uses a fenced monospace code block as an aligned table.
+the password list is a code-block table aligned with fullwidth padding.
 """
 from __future__ import annotations
 
-import unicodedata
 from dataclasses import dataclass
 
 from .models import Broadcast
@@ -20,10 +19,10 @@ _HEADERS: dict[str, str] = {
 }
 
 _SPLASHES: dict[str, str] = {
-    "price": "(spl)先别急着all in，看看群里怎么说(spl)",
-    "red": "(spl)群里先安静三秒，恭喜就完事了(spl)",
-    "password": "(spl)记不住没关系，随时在群里喊「今日密码」(spl)",
-    "task": "(spl)产能这种东西，放着是会过期的哦(spl)",
+    "price": "小贴士 ~ (spl)先别急着all in，看看群里怎么说(spl)",
+    "red": "小贴士 ~ (spl)群里先安静三秒，恭喜就完事了(spl)",
+    "password": "小贴士 ~ (spl)记不住没关系，随时在群里喊「今日密码」(spl)",
+    "task": "小贴士 ~ (spl)产能这种东西，放着是会过期的哦(spl)",
 }
 
 
@@ -70,43 +69,34 @@ def format_broadcast(broadcast: Broadcast, style: RichStyle | None = None) -> st
     return "\n".join(parts)
 
 
-def _display_width(text: str) -> int:
-    """Width in monospace cells: East Asian wide/fullwidth chars take two."""
-    total = 0
-    for char in text:
-        if unicodedata.combining(char):
-            continue
-        total += 2 if unicodedata.east_asian_width(char) in ("W", "F") else 1
-    return total
+def _to_fullwidth(s: str) -> str:
+    """Convert ASCII visible chars (``!``..``~``) to fullwidth (+0xFEE0)."""
+    return "".join(chr(ord(c) + 0xFEE0) if "!" <= c <= "~" else c for c in s)
 
 
-def _pad_right(text: str, width: int) -> str:
-    """Right-pad with spaces to the requested display width."""
-    return text + " " * max(0, width - _display_width(text))
+def format_password_table(pw: dict[str, str]) -> str:
+    """Render a code-block table aligned with fullwidth spaces and a ｜ divider.
 
-
-def format_password_table(entries: dict[str, str]) -> str:
-    """Render map/password pairs as an aligned table in a fenced code block.
-
-    KOOK KMarkdown has no native table syntax, but it does support fenced code
-    blocks rendered in a monospace font. Padding cells by *display* width keeps
-    the columns aligned even with Chinese map names mixed with ASCII digits.
+    Map names are converted to fullwidth so a halfwidth name such as ``AZ3``
+    occupies the same display width as the same number of CJK glyphs. Every
+    row is padded to the same character count on the left of ``｜``, which is
+    what actually makes the columns line up in KOOK's proportional code font.
+    The header carries emoji; data rows stay plain.
     """
-    if not entries:
+    if not pw:
         return ""
 
-    name_width = max(_display_width(name) for name in entries)
-    code_width = max(_display_width(code) for code in entries.values())
-    name_width = max(name_width, _display_width("地图"))
-    code_width = max(code_width, _display_width("密码"))
+    names = [_to_fullwidth(name) for name in pw]
+    head_label = "🗺 地图"
+    # 名字与表头一起取最大宽度，保证 emoji 表头也能与数据行对齐。
+    name_w = max([len(name) for name in names] + [len(head_label)])
 
-    def row(name: str, code: str) -> str:
-        return f"{_pad_right(name, name_width)}  {_pad_right(code, code_width)}"
+    lines = [f"{head_label.ljust(name_w, '　')}｜🔑 密码"]
 
-    divider = f"{'-' * name_width}  {'-' * code_width}"
-    body = [row("地图", "密码"), divider]
-    body.extend(row(name, code) for name, code in entries.items())
-    return "```\n" + "\n".join(body) + "\n```"
+    for name, code in zip(names, pw.values()):
+        lines.append(f"{name.ljust(name_w, '　')}｜{code}")
+
+    return "```\n" + "\n".join(lines) + "\n```"
 
 
 def format_password_card(
