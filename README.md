@@ -282,7 +282,27 @@ logs/squad-radio_20261118-223005_4321.log
 
 ## 部署到服务器
 
-### 一条命令部署（任意外网 Linux 主机）
+### Windows 一键部署（推荐）
+
+双击 `一键部署远端.cmd`，或在本目录用 PowerShell 运行：
+
+```powershell
+.\deploy_remote.ps1                  # 部署到云端节点（默认动作）
+.\deploy_remote.ps1 -Action status   # 状态 + 健康检查
+.\deploy_remote.ps1 -Action logs     # 最近日志
+.\deploy_remote.ps1 -Action restart  # 重启服务
+```
+
+它替你封装了远端部署脚本和所有参数，重点是**安全默认值**：
+
+- **默认 `KEEP_TOKEN=1`**：只更新代码，不覆盖云端正在用的机器人 token（本地 `.env.token` 通常是另一个测试机器人）。确实要替换时加 `-WithToken`。
+- **默认走本地代理隧道** `socks5h://127.0.0.1:14455`（直连节点会被丢包）；换代理用 `-Proxy`，直连用 `-NoProxy`。
+- 自动定位 Git for Windows 的 `bash.exe`（避开 WSL 占位程序），并固定用项目 venv 的 python 驱动代理隧道。
+- 部署后自动等到 KOOK 真正连上才返回。脚本会先找 Git Bash；若检测失败可用 `-BashPath` 指定。
+
+> 想让远端跑 GitHub 上的最新代码，先 `git push`，再执行上面的部署。
+
+### 一条命令部署（任意外网 Linux 主机 / 跨平台）
 
 本机（Git Bash / macOS / Linux）执行，脚本会打包上传、装依赖、建 venv、写 systemd 单元、启动并**等到 KOOK 真正连上**才返回：
 
