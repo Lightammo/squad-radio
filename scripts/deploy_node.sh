@@ -7,6 +7,7 @@
 #   ./scripts/deploy_node.sh restart
 #
 # 覆盖参数：HOST / PORT / SSH_USER / SSH_KEY / APP_DIR / HEALTH_PORT
+# KEEP_TOKEN=1：只更新代码，保留云端现有 .env.token（本地测试 token 与云端机器人不同时用）
 # 走代理隧道（本地 14455 之类）：SSH_PROXY=socks5h://127.0.0.1:14455
 #   HOST=1.2.3.4 PORT=2222 SSH_KEY=~/.ssh/team_ed25519 ./scripts/deploy_node.sh
 set -euo pipefail
@@ -69,10 +70,15 @@ case "${ACTION}" in
         remote "systemctl restart ${SERVICE} && sleep 3 && systemctl is-active ${SERVICE}"
         ;;
     deploy)
-        TOKEN="$(tr -d '\r\n' < .env.token 2>/dev/null || true)"
-        if [ -z "${TOKEN}" ] && [ -z "${KOOK_TOKEN:-}" ]; then
-            bad "本地没有 .env.token，也没有 KOOK_TOKEN 环境变量，无法部署"
-            exit 1
+        if [ "${KEEP_TOKEN:-0}" = "1" ]; then
+            say "KEEP_TOKEN=1：保留云端现有 token，不覆盖"
+            TOKEN=""
+        else
+            TOKEN="$(tr -d '\r\n' < .env.token 2>/dev/null || true)"
+            if [ -z "${TOKEN}" ] && [ -z "${KOOK_TOKEN:-}" ]; then
+                bad "本地没有 .env.token，也没有 KOOK_TOKEN 环境变量，无法部署"
+                exit 1
+            fi
         fi
         precheck
 
