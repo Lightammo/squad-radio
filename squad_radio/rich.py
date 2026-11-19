@@ -87,11 +87,11 @@ def format_password_table(pw: dict[str, str]) -> str:
         return ""
 
     names = [_to_fullwidth(name) for name in pw]
-    head_label = "🗺 地图"
+    head_label = "地图 🗺"
     # 名字与表头一起取最大宽度，保证 emoji 表头也能与数据行对齐。
     name_w = max([len(name) for name in names] + [len(head_label)])
 
-    lines = [f"{head_label.ljust(name_w, '　')}｜🔑 密码"]
+    lines = [f"{head_label.ljust(name_w, '　')}｜密码🔑"]
 
     for name, code in zip(names, pw.values()):
         lines.append(f"{name.ljust(name_w, '　')}｜{code}")
